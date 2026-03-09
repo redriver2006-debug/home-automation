@@ -268,7 +268,7 @@ Without AI assistance, this project would have been impossible for me. With AI, 
 
 ## Acknowledgments
 
-This project was built entirely with AI assistance (OpenClaw + various AI models), demonstrating that the future of personal technology is human-AI collaboration.
+This project was built entirely with AI assistance, primarily using **Claude Opus 4.5** (Anthropic) through the OpenClaw framework. This demonstrates that the future of personal technology is human-AI collaboration.
 
 ---
 
