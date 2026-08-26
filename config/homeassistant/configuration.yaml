@@ -196,7 +196,7 @@ homekit:
         - binary_sensor.dining_room_occupancy
         - binary_sensor.living_room_occupancy
         - binary_sensor.0x0000000000000002_occupancy
-        - light.room_bao
+        - light.room_2_light
         - light.outdoor_light
         - button.gate_relay_1
         - climate.study_esphome_daikin_ir_daikin_ac
@@ -383,8 +383,8 @@ template:
         unit_of_measurement: "min"
         icon: mdi:timer-outline
         state: >-
-          {% if is_state('light.room_bao','on') %}
-            {{ ((as_timestamp(now()) - as_timestamp(states.light['room_bao'].last_changed)) / 60) | round(1) }}
+          {% if is_state('light.room_2_light','on') %}
+            {{ ((as_timestamp(now()) - as_timestamp(states.light['room_2_light'].last_changed)) / 60) | round(1) }}
           {% else %}
             0
           {% endif %}
