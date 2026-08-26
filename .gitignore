@@ -1,0 +1,13 @@
+secrets.yaml
+.doorbird_env
+ssh/
+.storage/
+www/
+backups/
+*.db
+*.db-*
+*.log
+.esphome/
+__pycache__/
+deps/
+tts/

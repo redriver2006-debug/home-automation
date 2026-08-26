@@ -1,0 +1,426 @@
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+http:
+  server_port: 8124
+  server_host: 0.0.0.0
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 172.17.0.0/16
+    - 10.0.0.0/8
+
+shell_command:
+  doorbird_open_gate_relay1: >-
+    /bin/bash -lc 'set -a; source /config/.doorbird_env; curl -fsS --max-time 8 -u "$DOORBIRD_USER:$DOORBIRD_PASS" "http://192.168.1.12/bha-api/open-door.cgi?r=1" >/dev/null'
+  telegram_private_text: >-
+    /bin/bash -lc 'set -a; source /config/.doorbird_env; curl -fsS --max-time 8 -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" --data-urlencode "chat_id=REDACTED_CHAT_ID" --data-urlencode "text=ALERT: Sliding Gate open >60s" >/dev/null'
+  telegram_gate_presence_test_text: >-
+    /bin/bash -lc 'set -a; source /config/.doorbird_env; curl -fsS --max-time 8 -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" --data-urlencode "chat_id=REDACTED_CHAT_ID" --data-urlencode "text={{ text }}" >/dev/null'
+  imessage_sliding_gate_60s: >-
+    /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh gate_60s
+  imessage_sliding_gate_repeat: >-
+    /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh gate_repeat
+  telegram_alarm_motion_hallway: >-
+    /bin/bash -lc 'set -a; source /config/.doorbird_env; curl -fsS --max-time 8 -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" --data-urlencode "chat_id=REDACTED_CHAT_ID" --data-urlencode "text=ALERT: Motion detected at Hallway" >/dev/null'
+  telegram_alarm_motion_dining: >-
+    /bin/bash -lc 'set -a; source /config/.doorbird_env; curl -fsS --max-time 8 -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" --data-urlencode "chat_id=REDACTED_CHAT_ID" --data-urlencode "text=ALERT: Motion detected at Dining Room" >/dev/null'
+  telegram_alarm_motion_living: >-
+    /bin/bash -lc 'set -a; source /config/.doorbird_env; curl -fsS --max-time 8 -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" --data-urlencode "chat_id=REDACTED_CHAT_ID" --data-urlencode "text=ALERT: Motion detected at Living Room" >/dev/null'
+  telegram_alarm_motion_cabinet: >-
+    /bin/bash -lc 'set -a; source /config/.doorbird_env; curl -fsS --max-time 8 -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" --data-urlencode "chat_id=REDACTED_CHAT_ID" --data-urlencode "text=ALERT: Motion detected at Cabinet" >/dev/null'
+  imessage_alarm_motion_hallway: >-
+    /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh motion_hallway
+  imessage_alarm_motion_dining: >-
+    /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh motion_dining
+  imessage_alarm_motion_living: >-
+    /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh motion_living
+  imessage_alarm_motion_cabinet: >-
+    /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh motion_cabinet
+  telegram_alarm_armed_text: >-
+    /bin/bash -lc 'set -a; source /config/.doorbird_env; curl -fsS --max-time 8 -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" --data-urlencode "chat_id=REDACTED_CHAT_ID" --data-urlencode "text=ARMED: Alarm Button pressed" >/dev/null'
+  telegram_alarm_disarmed_text: >-
+    /bin/bash -lc 'set -a; source /config/.doorbird_env; curl -fsS --max-time 8 -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" --data-urlencode "chat_id=REDACTED_CHAT_ID" --data-urlencode "text=DISARMED: Alarm Button pressed" >/dev/null'
+  imessage_alarm_armed_text: >-
+    /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh armed
+  imessage_alarm_disarmed_text: >-
+    /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh disarmed
+
+  telegram_front_gate_timeout_text: >-
+    /bin/bash -lc 'set -a; source /config/.doorbird_env; curl -fsS --max-time 8 -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" --data-urlencode "chat_id=REDACTED_CHAT_ID" --data-urlencode "text=ALERT: Front Door opened/closed; no disarm within 60s" >/dev/null'
+  imessage_front_gate_timeout_text: >-
+    /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh front_gate_timeout
+
+  dynamic_door_alert: >-
+    /bin/bash -lc '/config/send_dynamic_alert.sh "{{ context }}" "{{ doors }}"'
+  telegram_armed_doors_still_open: >-
+    /bin/bash -lc 'set -a; source /config/.doorbird_env; curl -fsS --max-time 8 -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" --data-urlencode "chat_id=REDACTED_CHAT_ID" --data-urlencode "text=ALERT: Armed while non-exit doors still open (LivingRoom/Back Door)" >/dev/null'
+  telegram_night_doors_open: >-
+    /bin/bash -lc 'set -a; source /config/.doorbird_env; curl -fsS --max-time 8 -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" --data-urlencode "chat_id=REDACTED_CHAT_ID" --data-urlencode "text=ALERT: 22:05 check found one or more doors still open" >/dev/null'
+  telegram_back_door_armed_text: >-
+    /bin/bash -lc 'set -a; source /config/.doorbird_env; curl -fsS --max-time 8 -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" --data-urlencode "chat_id=REDACTED_CHAT_ID" --data-urlencode "text=ALERT: Back Door opened while armed" >/dev/null'
+  imessage_back_door_armed_text: >-
+    /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh back_door_open
+
+  telegram_livingroom_door_armed_text: >-
+    /bin/bash -lc 'set -a; source /config/.doorbird_env; curl -fsS --max-time 8 -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" --data-urlencode "chat_id=REDACTED_CHAT_ID" --data-urlencode "text=ALERT: Living Room Door opened while armed" >/dev/null'
+  imessage_livingroom_door_armed_text: >-
+    /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh livingroom_door_armed_open
+
+  imessage_livingroom_door_open: >-
+    /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh livingroom_door_open
+
+  imessage_night_doors_open: >-
+    /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh night_doors_open
+
+  imessage_armed_doors_still_open: >-
+    /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh armed_doors_still_open
+
+  imessage_doorbell_ring_snapshot: >-
+    /bin/bash -lc 'set -e; set -a; source /config/.doorbird_env; SRC=/config/www/doorbird_doorbell_latest.jpg; DST=/tmp/doorbird_doorbell_latest.jpg; curl -fsS --max-time 8 -u "$DOORBIRD_USER:$DOORBIRD_PASS" "http://192.168.1.12/bha-api/image.cgi" -o "$SRC"; /usr/bin/scp -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 "$SRC" youruser@192.168.1.13:"$DST"; /usr/bin/ssh -i /config/ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/config/ssh/known_hosts -o ConnectTimeout=5 youruser@192.168.1.13 /Users/youruser/scripts/imsg_alarm_notify.sh doorbell_ring "$DST"'
+
+input_boolean:
+  alarm_bottom_armed:
+    name: Alarm Bottom Armed
+    icon: mdi:shield-home
+  sliding_gate_watchdog_enabled:
+    name: Sliding Gate Watchdog Enabled
+    icon: mdi:gate-alert
+    initial: true
+  gate_presence_test_enabled:
+    name: Gate Presence Test Enabled
+    icon: mdi:radar
+    initial: true
+  person_a_is_home:
+    name: "Home Presence: Person A"
+    icon: mdi:home-lock
+  gate_arrival_pending:
+    name: Gate Arrival Pending
+    icon: mdi:flag-checkered
+    initial: false
+  person_b_is_home:
+    name: "Home Presence: Person B"
+    icon: mdi:account-heart
+  ble_person_a_arrival_distance_sent:
+    name: BLE Person A Arrival Distance Sent
+    icon: mdi:ruler
+    initial: false
+  ble_person_b_arrival_distance_sent:
+    name: BLE Person B Arrival Distance Sent
+    icon: mdi:ruler
+    initial: false
+  ble_person_a_arrival_gate_sent:
+    name: BLE Person A Arrival Gate Sent
+    icon: mdi:access-point
+    initial: false
+  ble_person_a_arrival_living_sent:
+    name: BLE Person A Arrival Living Sent
+    icon: mdi:access-point
+    initial: false
+  ble_person_b_arrival_gate_sent:
+    name: BLE Person B Arrival Gate Sent
+    icon: mdi:access-point
+    initial: false
+  ble_person_b_arrival_living_sent:
+    name: BLE Person B Arrival Living Sent
+    icon: mdi:access-point
+    initial: false
+
+input_datetime:
+  gate_presence_last_notify:
+    name: Gate Presence Last Notify
+    has_date: true
+    has_time: true
+  ble_person_a_gate_last_seen:
+    name: BLE Person A Gate Last Seen
+    has_date: true
+    has_time: true
+  ble_person_a_living_last_seen:
+    name: BLE Person A Living Last Seen
+    has_date: true
+    has_time: true
+  ble_person_b_gate_last_seen:
+    name: BLE Person B Gate Last Seen
+    has_date: true
+    has_time: true
+  ble_person_b_living_last_seen:
+    name: BLE Person B Living Last Seen
+    has_date: true
+    has_time: true
+  ble_phone_last_seen:
+    name: BLE Phone Last Seen
+    has_date: true
+    has_time: true
+  ble_phone_last_arrival:
+    name: BLE Phone Last Arrival
+    has_date: true
+    has_time: true
+  ble_phone_last_departure:
+    name: BLE Phone Last Departure
+    has_date: true
+    has_time: true
+
+homekit:
+  - name: Home Assistant Bridge
+    port: 21063
+    filter:
+      include_entities:
+        # Cameras
+        - camera.gate_live
+        - camera.front_door_fluent_lens_0
+
+        # One-tap gate open action
+        - script.open_gate_when_home
+
+        # Arm status
+        - input_boolean.alarm_bottom_armed
+        - input_boolean.person_a_is_home
+        - input_boolean.person_b_is_home
+        - binary_sensor.homekit_person_a_is_home_status
+
+        # Door contacts
+        - binary_sensor.sliding_gate_contact
+        - binary_sensor.front_gate_contact
+        - binary_sensor.back_door_contact
+        - binary_sensor.0x0000000000000001_contact
+
+        # Motion sensors
+        - binary_sensor.hallway_occupancy
+        - binary_sensor.dining_room_occupancy
+        - binary_sensor.living_room_occupancy
+        - binary_sensor.0x0000000000000002_occupancy
+        - light.room_bao
+        - light.outdoor_light
+        - button.gate_relay_1
+        - climate.study_esphome_daikin_ir_daikin_ac
+        - climate.fujitsu_ac_fujitsu_ac
+homeassistant:
+  customize:
+    input_boolean.alarm_bottom_armed:
+      friendly_name: Arm Switch
+    input_boolean.person_a_is_home:
+      hidden: true
+      entity_registry_visible_default: false
+    script.open_gate_when_home:
+      friendly_name: Open Gate
+    binary_sensor.homekit_person_a_is_home_status:
+      friendly_name: HomeKit At Home Status (Person A)
+    binary_sensor.homekit_person_b_is_home_status:
+      friendly_name: HomeKit At Home Status (Person B)
+
+input_text:
+  ble_phone_last_stay_duration:
+    name: BLE Phone Last Stay Duration
+    max: 64
+
+input_number:
+  ble_person_a_gate_distance:
+    name: BLE Person A Gate Distance
+    min: 0
+    max: 50
+    step: 0.1
+    unit_of_measurement: "m"
+  ble_person_a_living_distance:
+    name: BLE Person A Living Distance
+    min: 0
+    max: 50
+    step: 0.1
+    unit_of_measurement: "m"
+  ble_person_b_gate_distance:
+    name: BLE Person B Gate Distance
+    min: 0
+    max: 50
+    step: 0.1
+    unit_of_measurement: "m"
+  ble_person_b_living_distance:
+    name: BLE Person B Living Distance
+    min: 0
+    max: 50
+    step: 0.1
+    unit_of_measurement: "m"
+
+template:
+  - binary_sensor:
+      - name: "BLE Phone Home"
+        unique_id: ble_phone_home
+        state: >-
+          {{ is_state('binary_sensor.ble_person_a_gate_nearby','on') and is_state('binary_sensor.ble_person_a_living_nearby','on') }}
+        icon: >-
+          {% if is_state('binary_sensor.ble_phone_home','on') %}
+            mdi:home-account
+          {% else %}
+            mdi:home-off
+          {% endif %}
+
+      - name: "BLE Phone Current Stay Minutes"
+        unique_id: ble_phone_current_stay_minutes
+        unit_of_measurement: "min"
+        state: >-
+          {% if is_state('binary_sensor.ble_phone_home','on') %}
+            {% set a = states('input_datetime.ble_phone_last_arrival') %}
+            {% if a in ['unknown','unavailable',''] %}
+              0
+            {% else %}
+              {{ ((as_timestamp(now()) - as_timestamp(a)) / 60) | round(1) }}
+            {% endif %}
+          {% else %}
+            0
+          {% endif %}
+
+      - name: "BLE Phone Presence Status"
+        unique_id: ble_phone_presence_status
+        state: >-
+          {% if is_state('binary_sensor.ble_phone_home','on') %}
+            在家
+          {% else %}
+            离家
+          {% endif %}
+
+      - name: "HomeKit Person A Is Home Status"
+        unique_id: homekit_person_a_is_home_status
+        device_class: presence
+        state: >-
+          {{ is_state('input_boolean.person_a_is_home', 'on') }}
+        icon: >-
+          {% if is_state('input_boolean.person_a_is_home', 'on') %}
+            mdi:home-account
+          {% else %}
+            mdi:home-off
+          {% endif %}
+
+      - name: "HomeKit Person B Is Home Status"
+        unique_id: homekit_person_b_is_home_status
+        device_class: presence
+        state: >-
+          {{ is_state('input_boolean.person_b_is_home', 'on') }}
+        icon: >-
+          {% if is_state('input_boolean.person_b_is_home', 'on') %}
+            mdi:home-account
+          {% else %}
+            mdi:home-off
+          {% endif %}
+
+  - sensor:
+      - name: "HomeKit Home Status Summary"
+        unique_id: homekit_home_status_summary
+        state: >-
+          {% set names = namespace(v=[]) %}
+          {% if is_state('input_boolean.person_a_is_home','on') %}
+            {% set names.v = names.v + ['Person A'] %}
+          {% endif %}
+          {% if is_state('input_boolean.person_b_is_home','on') %}
+            {% set names.v = names.v + ['Person B'] %}
+          {% endif %}
+          {% if names.v | length == 0 %}
+            Nobody home
+          {% else %}
+            {{ names.v | join(', ') }}
+          {% endif %}
+
+  - binary_sensor:
+      - name: "BLE Person A Gate Nearby"
+        unique_id: ble_person_a_gate_nearby
+        state: >-
+          {% set t = states('input_datetime.ble_person_a_gate_last_seen') %}
+          {% if t in ['unknown','unavailable',''] %}
+            false
+          {% else %}
+            {{ (as_timestamp(now()) - as_timestamp(t)) <= 180 }}
+          {% endif %}
+
+      - name: "BLE Person A Living Nearby"
+        unique_id: ble_person_a_living_nearby
+        state: >-
+          {% set t = states('input_datetime.ble_person_a_living_last_seen') %}
+          {% if t in ['unknown','unavailable',''] %}
+            false
+          {% else %}
+            {{ (as_timestamp(now()) - as_timestamp(t)) <= 180 }}
+          {% endif %}
+
+      - name: "BLE Person B Gate Nearby"
+        unique_id: ble_person_b_gate_nearby
+        state: >-
+          {% set t = states('input_datetime.ble_person_b_gate_last_seen') %}
+          {% if t in ['unknown','unavailable',''] %}
+            false
+          {% else %}
+            {{ (as_timestamp(now()) - as_timestamp(t)) <= 180 }}
+          {% endif %}
+
+      - name: "BLE Person B Living Nearby"
+        unique_id: ble_person_b_living_nearby
+        state: >-
+          {% set t = states('input_datetime.ble_person_b_living_last_seen') %}
+          {% if t in ['unknown','unavailable',''] %}
+            false
+          {% else %}
+            {{ (as_timestamp(now()) - as_timestamp(t)) <= 180 }}
+          {% endif %}
+
+      - name: "BLE Person B Home"
+        unique_id: ble_person_b_home
+        state: >-
+          {{ is_state('binary_sensor.ble_person_b_gate_nearby','on') and is_state('binary_sensor.ble_person_b_living_nearby','on') }}
+        icon: >-
+          {% if is_state('binary_sensor.ble_person_b_home','on') %}
+            mdi:home-account
+          {% else %}
+            mdi:home-off
+          {% endif %}
+
+
+  - sensor:
+      - name: "Light 0xe8 On Duration Minutes"
+        unique_id: light_0xe8_on_duration_minutes
+        unit_of_measurement: "min"
+        icon: mdi:timer-outline
+        state: >-
+          {% if is_state('light.room_bao','on') %}
+            {{ ((as_timestamp(now()) - as_timestamp(states.light['room_bao'].last_changed)) / 60) | round(1) }}
+          {% else %}
+            0
+          {% endif %}
+
+      - name: "Light 0xa4 On Duration Minutes"
+        unique_id: light_0xa4_on_duration_minutes
+        unit_of_measurement: "min"
+        icon: mdi:timer-outline
+        state: >-
+          {% if is_state('light.outdoor_light','on') %}
+            {{ ((as_timestamp(now()) - as_timestamp(states.light['outdoor_light'].last_changed)) / 60) | round(1) }}
+          {% else %}
+            0
+          {% endif %}
+
+recorder:
+  purge_keep_days: 7
+  commit_interval: 30
+  exclude:
+    domains:
+      - update
+    entity_globs:
+      # BLE presence churn - ~76% of the database
+      - automation.ble_*
+      - input_datetime.ble_*
+      - input_number.ble_*
+      - input_text.ble_*
+      # ESPresense diagnostics
+      - sensor.espresense_*
+      - binary_sensor.espresense_*
+      # now()-based templates that rewrite every minute
+      - sensor.*_on_duration_minutes
+      - sensor.ble_phone_current_stay_minutes
+      # generic device noise
+      - sensor.*_linkquality
+      - sensor.*_rssi
+      - sensor.*_uptime
+      - sensor.*_free_mem
+      - sensor.*_free_memory

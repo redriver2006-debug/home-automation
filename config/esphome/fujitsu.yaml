@@ -1,0 +1,99 @@
+substitutions:
+  name: fujitsu-ir
+  friendly_name: "Fujitsu AC"
+  ap_ssid: "Fujitsu-Ir Fallback Hotspot"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+packages:
+  wifi: !include packages/wifi.yaml
+  ota: !include packages/ota.yaml
+  logger: !include packages/logger.yaml
+  api: !include packages/api.yaml
+  common_ir: !include packages/common_ir.yaml
+
+# Transmitter moved to GPIO14 (GPIO4 is now used by the receiver below).
+remote_transmitter:
+  pin: GPIO14
+  carrier_duty_percent: 50%
+
+# IR receiver on GPIO4 — lets the climate entity track state changes made
+# from the physical remote, not just commands sent from HA.
+remote_receiver:
+  id: rcvr
+  pin:
+    number: GPIO4
+    inverted: true
+    mode:
+      input: true
+      pullup: true
+  tolerance: 55%
+  dump: all
+
+climate:
+  - platform: fujitsu_general
+    name: "Fujitsu AC"
+    receiver_id: rcvr
+
+button:
+  - platform: template
+    name: "Sony TV Power"
+    on_press:
+      - remote_transmitter.transmit_sony:
+          data: 0xA90
+          nbits: 12
+          repeat:
+            times: 5
+            wait_time: 50ms
+  - platform: template
+    name: "Sony TV Volume Up"
+    on_press:
+      - remote_transmitter.transmit_sony:
+          data: 0x490
+          nbits: 12
+          repeat:
+            times: 5
+            wait_time: 50ms
+  - platform: template
+    name: "Sony TV Volume Down"
+    on_press:
+      - remote_transmitter.transmit_sony:
+          data: 0xC90
+          nbits: 12
+          repeat:
+            times: 5
+            wait_time: 50ms
+  - platform: template
+    name: "Sony TV Channel Up"
+    on_press:
+      - remote_transmitter.transmit_sony:
+          data: 0x090
+          nbits: 12
+          repeat:
+            times: 5
+            wait_time: 50ms
+  - platform: template
+    name: "Sony TV Channel Down"
+    on_press:
+      - remote_transmitter.transmit_sony:
+          data: 0x890
+          nbits: 12
+          repeat:
+            times: 5
+            wait_time: 50ms
+  - platform: template
+    name: "Sony TV Mute"
+    on_press:
+      - remote_transmitter.transmit_sony:
+          data: 0x290
+          nbits: 12
+          repeat:
+            times: 5
+            wait_time: 50ms

@@ -1,0 +1,4 @@
+api:
+  # If the native API path stays unhealthy for too long, reboot instead of
+  # leaving the node half-alive and offline for hours.
+  reboot_timeout: 10min

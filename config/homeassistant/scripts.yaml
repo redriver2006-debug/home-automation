@@ -1,0 +1,102 @@
+open_gate_when_home:
+  alias: Open Gate (Only When Home)
+  mode: single
+  sequence:
+  - condition: or
+    conditions:
+    - condition: state
+      entity_id: person.person_a
+      state: home
+    - condition: state
+      entity_id: device_tracker.mr_moon
+      state: home
+  - action: shell_command.doorbird_open_gate_relay1
+alarm_intrusion_response:
+  alias: Alarm Intrusion Response (Loop Until Disarm)
+  description: 'On intrusion: sounds the Zigbee siren (melody 6) and plays the siren
+    MP3 on the living room speaker once, while independently flashing the Outdoor
+    Light (red, full brightness) and Front Door Floodlight (full brightness) on a
+    fast 5s-on/1s-off cycle for as long as the alarm is armed. The light flash runs
+    in parallel with the audio so it is never delayed by the speaker call.'
+  mode: restart
+  sequence:
+  - parallel:
+    - sequence:
+      - continue_on_error: true
+        action: mqtt.publish
+        data:
+          topic: zigbee2mqtt/Siren/set
+          payload: '{"alarm":true,"melody":6,"volume":"high"}'
+      - continue_on_error: true
+        action: media_player.play_media
+        target:
+          entity_id: media_player.living_room
+        data:
+          media_content_id: http://192.168.1.10:8124/local/siren.mp3
+          media_content_type: music
+    - repeat:
+        while:
+        - condition: state
+          entity_id: input_boolean.alarm_bottom_armed
+          state: 'on'
+        sequence:
+        - action: light.turn_on
+          target:
+            entity_id: light.outdoor_light
+          data:
+            rgb_color:
+            - 255
+            - 0
+            - 0
+            brightness: 255
+        - action: light.turn_on
+          target:
+            entity_id: light.front_door_floodlight
+          data:
+            brightness: 255
+        - delay: 00:00:05
+        - action: light.turn_off
+          target:
+            entity_id:
+            - light.outdoor_light
+            - light.front_door_floodlight
+        - delay: 00:00:01
+  - continue_on_error: true
+    action: mqtt.publish
+    data:
+      topic: zigbee2mqtt/Siren/set
+      payload: '{"alarm":false}'
+water_valve_1_run_now:
+  alias: Water Valve 1 - Run now
+  description: Opens valve 1 immediately for the duration set on the Watering tab.
+    The valve's own countdown closes it.
+  icon: mdi:water-play
+  mode: single
+  sequence:
+  - action: number.set_value
+    target:
+      entity_id: number.water_valve_1_countdown
+    data:
+      value: '{{ states(''input_number.water_valve_1_duration'') | int(15) }}'
+  - delay:
+      seconds: 2
+  - action: switch.turn_on
+    target:
+      entity_id: switch.water_valve_1
+water_valve_2_run_now:
+  alias: Water Valve 2 - Run now
+  description: Opens valve 2 immediately for the duration set on the Watering tab.
+    The valve's own countdown closes it.
+  icon: mdi:water-play
+  mode: single
+  sequence:
+  - action: number.set_value
+    target:
+      entity_id: number.water_valve_2_countdown
+    data:
+      value: '{{ states(''input_number.water_valve_2_duration'') | int(15) }}'
+  - delay:
+      seconds: 2
+  - action: switch.turn_on
+    target:
+      entity_id: switch.water_valve_2

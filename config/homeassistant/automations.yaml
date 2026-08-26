@@ -1,0 +1,1867 @@
+- id: doorbell_ring_notification
+  alias: DoorBird Doorbell iMessage Alert
+  description: When doorbell is pressed, send iMessage with snapshot only
+  trigger:
+  - platform: state
+    entity_id: event.gate_doorbell
+  action:
+  - service: shell_command.imessage_doorbell_ring_snapshot
+  - service: mqtt.publish
+    data:
+      topic: zigbee2mqtt/Siren/set
+      payload: '{"alarm":true,"melody":3,"volume":"high","duration":10}'
+  - delay: 00:00:05
+  - service: mqtt.publish
+    data:
+      topic: zigbee2mqtt/Siren/set
+      payload: '{"alarm":false}'
+  mode: single
+- id: handle_open_gate_action
+  alias: Handle Gate Open Button
+  triggers:
+  - event_type: mobile_app_notification_action
+    event_data:
+      action: OPEN_GATE
+    trigger: event
+  actions:
+  - action: shell_command.doorbird_open_gate_relay1
+  - data:
+      message: ✅ Gate opened
+    action: notify.send_message
+    target:
+      entity_id: notify.person_a_iphone
+  mode: single
+- id: sliding_gate_open_watchdog_alert
+  alias: Sliding Gate Open Watchdog Alert
+  description: When gate opens, log event; alert after 60s if still open; then repeat
+    every 5 minutes until closed
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.sliding_gate_contact
+    to: 'on'
+  condition:
+  - condition: state
+    entity_id: input_boolean.sliding_gate_watchdog_enabled
+    state: 'on'
+  action:
+  - service: logbook.log
+    data:
+      name: Sliding Gate
+      message: Sliding gate contact opened; starting 60-second check and 5-minute
+        repeat alerts
+      entity_id: binary_sensor.sliding_gate_contact
+  - delay: 00:01:00
+  - condition: state
+    entity_id: input_boolean.sliding_gate_watchdog_enabled
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.sliding_gate_contact
+    state: 'on'
+  - service: shell_command.telegram_private_text
+    data:
+      message: "\U0001F6A8 Sliding Gate has been open for more than 60 seconds. Please
+        check whether it should be closed."
+  - service: shell_command.imessage_sliding_gate_60s
+  - repeat:
+      while:
+      - condition: state
+        entity_id: binary_sensor.sliding_gate_contact
+        state: 'on'
+      - condition: state
+        entity_id: input_boolean.sliding_gate_watchdog_enabled
+        state: 'on'
+      sequence:
+      - delay: 00:05:00
+      - condition: state
+        entity_id: input_boolean.sliding_gate_watchdog_enabled
+        state: 'on'
+      - condition: state
+        entity_id: binary_sensor.sliding_gate_contact
+        state: 'on'
+      - service: shell_command.telegram_private_text
+        data:
+          message: "\U0001F6A8 Sliding Gate is still open (over 60 seconds). Please
+            check whether it should be closed."
+      - service: shell_command.imessage_sliding_gate_repeat
+  mode: restart
+- id: sliding_gate_watchdog_nightly_rearm
+  alias: Sliding Gate Watchdog Nightly Rearm
+  description: Re-enable the sliding gate watchdog every night; if the gate is still
+    open, alert once and restore watchdog protection
+  trigger:
+  - platform: time
+    at: '22:00:00'
+  action:
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.sliding_gate_watchdog_enabled
+  - choose:
+    - conditions:
+      - condition: state
+        entity_id: binary_sensor.sliding_gate_contact
+        state: 'on'
+      sequence:
+      - service: logbook.log
+        data:
+          name: Sliding Gate
+          message: Nightly check found the gate still open; watchdog re-enabled and
+            alert sent
+          entity_id: binary_sensor.sliding_gate_contact
+      - service: shell_command.telegram_gate_presence_test_text
+        data:
+          text: '⚠️ Nightly check: Sliding Gate is still open. I have re-enabled the
+            watchdog.'
+      - service: shell_command.imessage_sliding_gate_repeat
+    default:
+    - service: logbook.log
+      data:
+        name: Sliding Gate
+        message: Nightly check re-enabled the watchdog
+        entity_id: input_boolean.sliding_gate_watchdog_enabled
+  mode: single
+- id: alarm_bottom_single_press_arm
+  alias: Alarm Button - Single Click Arm
+  triggers:
+  - topic: zigbee2mqtt/Alarm Button
+    trigger: mqtt
+  conditions:
+  - condition: template
+    value_template: '{{ trigger.payload_json.action | default('''') == ''single''
+      }}'
+  actions:
+  - target:
+      entity_id: input_boolean.alarm_bottom_armed
+    action: input_boolean.turn_on
+  - action: shell_command.telegram_alarm_armed_text
+  - action: shell_command.imessage_alarm_armed_text
+  mode: single
+- id: alarm_bottom_double_press_disarm
+  alias: Alarm Button - Double Click Disarm
+  triggers:
+  - topic: zigbee2mqtt/Alarm Button
+    trigger: mqtt
+  conditions:
+  - condition: template
+    value_template: '{{ trigger.payload_json.action | default('''') == ''double''
+      }}'
+  actions:
+  - target:
+      entity_id: input_boolean.alarm_bottom_armed
+    action: input_boolean.turn_off
+  - action: shell_command.telegram_alarm_disarmed_text
+  - action: shell_command.imessage_alarm_disarmed_text
+  mode: single
+- id: alarm_motion_when_armed_alert_hallway
+  alias: Armed Status - Hallway Motion Alert
+  triggers:
+  - entity_id: binary_sensor.hallway_occupancy
+    to: 'on'
+    for: 00:00:02
+    trigger: state
+  conditions:
+  - condition: state
+    entity_id: input_boolean.alarm_bottom_armed
+    state: 'on'
+  actions:
+  - action: shell_command.telegram_alarm_motion_hallway
+  - action: shell_command.imessage_alarm_motion_hallway
+  - action: script.alarm_intrusion_response
+  mode: single
+- id: alarm_motion_when_armed_alert_dining
+  alias: Armed Status - Dining Room Motion Alert
+  triggers:
+  - entity_id: binary_sensor.dining_room_occupancy
+    to: 'on'
+    for: 00:00:02
+    trigger: state
+  conditions:
+  - condition: state
+    entity_id: input_boolean.alarm_bottom_armed
+    state: 'on'
+  actions:
+  - action: shell_command.telegram_alarm_motion_dining
+  - action: shell_command.imessage_alarm_motion_dining
+  - action: script.alarm_intrusion_response
+  mode: single
+- id: alarm_motion_when_armed_alert_living
+  alias: Armed Status - Living Room Motion Alert
+  triggers:
+  - entity_id: binary_sensor.living_room_occupancy
+    to: 'on'
+    for: 00:00:02
+    trigger: state
+  conditions:
+  - condition: state
+    entity_id: input_boolean.alarm_bottom_armed
+    state: 'on'
+  actions:
+  - action: shell_command.telegram_alarm_motion_living
+  - action: shell_command.imessage_alarm_motion_living
+  - action: script.alarm_intrusion_response
+  mode: single
+- id: alarm_motion_when_armed_alert_cabinet
+  alias: Cabinet Motion Alert
+  description: Notify on Cabinet motion at all times; also run the full intrusion
+    response (siren + lights) when the alarm is armed
+  triggers:
+  - trigger: state
+    entity_id: binary_sensor.cabinet_occupancy
+    to: 'on'
+    for: 00:00:02
+  actions:
+  - action: shell_command.telegram_alarm_motion_cabinet
+  - action: shell_command.imessage_alarm_motion_cabinet
+  - if:
+    - condition: state
+      entity_id: input_boolean.alarm_bottom_armed
+      state: 'on'
+    then:
+    - action: script.alarm_intrusion_response
+  mode: single
+- id: alarm_motion_when_armed_alert_laundry
+  alias: Armed Status - Laundry Room Motion Alert (Continuous Trigger)
+  triggers:
+  - entity_id: binary_sensor.laundry_occupancy
+    to: 'on'
+    for: 00:00:02
+    trigger: state
+  conditions:
+  - condition: state
+    entity_id: input_boolean.alarm_bottom_armed
+    state: 'on'
+  actions:
+  - data:
+      text: 'ALERT: Motion detected at Laundry Room'
+    action: shell_command.telegram_gate_presence_test_text
+  - action: script.alarm_intrusion_response
+  mode: single
+- id: alarm_front_gate_change_require_disarm
+  alias: Front Door - Not Disarmed 60s After Open Alert
+  description: While armed, if the Front Door opens (even briefly) and isn't disarmed
+    within 60 seconds, send an alert
+  triggers:
+  - entity_id: binary_sensor.front_contact
+    to: 'on'
+    trigger: state
+  conditions:
+  - condition: state
+    entity_id: input_boolean.alarm_bottom_armed
+    state: 'on'
+  - condition: template
+    value_template: '{% set armed_changed = states.input_boolean.alarm_bottom_armed.last_changed
+      %} {{ armed_changed is not none and (as_timestamp(now()) - as_timestamp(armed_changed))
+      >= 60 }}'
+  actions:
+  - delay: 00:01:00
+  - condition: state
+    entity_id: input_boolean.alarm_bottom_armed
+    state: 'on'
+  - action: shell_command.telegram_front_gate_timeout_text
+  - action: shell_command.imessage_front_gate_timeout_text
+  mode: restart
+- id: alarm_back_door_when_armed_alert
+  alias: Back Door/Living Room Door - Armed Open Alert
+  triggers:
+  - entity_id:
+    - binary_sensor.back_contact
+    - binary_sensor.livingroom_contact
+    to: 'on'
+    trigger: state
+  conditions:
+  - condition: state
+    entity_id: input_boolean.alarm_bottom_armed
+    state: 'on'
+  actions:
+  - variables:
+      door_name: '{% if trigger.entity_id == ''binary_sensor.back_contact'' %}Back
+        Door{% else %}LivingRoom{% endif %}'
+  - data:
+      context: Door opened while armed
+      doors: '{{ door_name }}'
+    action: shell_command.dynamic_door_alert
+  mode: single
+- id: livingroom_door_open_night
+  alias: Night Door Open Check 22:05
+  description: 每天22:05检查所有门磁，若仍开门则每5分钟重复提醒，直到全部关闭
+  triggers:
+  - at: '22:05:00'
+    trigger: time
+  conditions:
+  - condition: or
+    conditions:
+    - condition: state
+      entity_id: binary_sensor.sliding_gate_contact
+      state: 'on'
+    - condition: state
+      entity_id: binary_sensor.front_contact
+      state: 'on'
+    - condition: state
+      entity_id: binary_sensor.back_contact
+      state: 'on'
+    - condition: state
+      entity_id: binary_sensor.livingroom_contact
+      state: 'on'
+  actions:
+  - variables:
+      doors: '{% set ns = namespace(items=[]) %} {% if is_state(''binary_sensor.sliding_gate_contact'',''on'')
+        %}{% set ns.items = ns.items + [''Sliding Gate''] %}{% endif %} {% if is_state(''binary_sensor.front_contact'',''on'')
+        %}{% set ns.items = ns.items + [''Front Door''] %}{% endif %} {% if is_state(''binary_sensor.back_contact'',''on'')
+        %}{% set ns.items = ns.items + [''Back Door''] %}{% endif %} {% if is_state(''binary_sensor.livingroom_contact'',''on'')
+        %}{% set ns.items = ns.items + [''LivingRoom''] %}{% endif %} {{ ns.items
+        | join('', '') }}'
+  - data:
+      context: 22:05 doors still open
+      doors: '{{ doors }}'
+    action: shell_command.dynamic_door_alert
+  - repeat:
+      while:
+      - condition: or
+        conditions:
+        - condition: state
+          entity_id: binary_sensor.sliding_gate_contact
+          state: 'on'
+        - condition: state
+          entity_id: binary_sensor.front_contact
+          state: 'on'
+        - condition: state
+          entity_id: binary_sensor.back_contact
+          state: 'on'
+        - condition: state
+          entity_id: binary_sensor.livingroom_contact
+          state: 'on'
+      sequence:
+      - delay: 00:05:00
+      - condition: or
+        conditions:
+        - condition: state
+          entity_id: binary_sensor.sliding_gate_contact
+          state: 'on'
+        - condition: state
+          entity_id: binary_sensor.front_contact
+          state: 'on'
+        - condition: state
+          entity_id: binary_sensor.back_contact
+          state: 'on'
+        - condition: state
+          entity_id: binary_sensor.livingroom_contact
+          state: 'on'
+      - variables:
+          doors: '{% set ns = namespace(items=[]) %} {% if is_state(''binary_sensor.sliding_gate_contact'',''on'')
+            %}{% set ns.items = ns.items + [''Sliding Gate''] %}{% endif %} {% if
+            is_state(''binary_sensor.front_contact'',''on'') %}{% set ns.items = ns.items
+            + [''Front Door''] %}{% endif %} {% if is_state(''binary_sensor.back_contact'',''on'')
+            %}{% set ns.items = ns.items + [''Back Door''] %}{% endif %} {% if is_state(''binary_sensor.livingroom_contact'',''on'')
+            %}{% set ns.items = ns.items + [''LivingRoom''] %}{% endif %} {{ ns.items
+            | join('', '') }}'
+      - data:
+          context: Night doors still open
+          doors: '{{ doors }}'
+        action: shell_command.dynamic_door_alert
+  mode: restart
+- id: armed_doors_still_open_check
+  alias: After Arm - Check Non-Exit Doors Closed
+  description: After arming, immediately check non-exit door sensors (Living Room/Back
+    Door) for open doors; single message lists only doors still open
+  triggers:
+  - entity_id: input_boolean.alarm_bottom_armed
+    to: 'on'
+    trigger: state
+  conditions:
+  - condition: or
+    conditions:
+    - condition: state
+      entity_id: binary_sensor.livingroom_contact
+      state: 'on'
+    - condition: state
+      entity_id: binary_sensor.back_contact
+      state: 'on'
+  actions:
+  - variables:
+      doors: '{% set ns = namespace(items=[]) %} {% if is_state(''binary_sensor.livingroom_contact'',''on'')
+        %}{% set ns.items = ns.items + [''LivingRoom''] %}{% endif %} {% if is_state(''binary_sensor.back_contact'',''on'')
+        %}{% set ns.items = ns.items + [''Back Door''] %}{% endif %} {{ ns.items |
+        join('', '') }}'
+  - data:
+      context: Armed while non-exit doors open
+      doors: '{{ doors }}'
+    action: shell_command.dynamic_door_alert
+  mode: single
+- id: gate_presence_ble_gate_nearby_autounlock
+  alias: Gate Presence BLE - Auto Open On Arrival
+  description: 'Opens the sliding gate on arrival. Speed comes from MQTT triggers
+    that re-evaluate on every ESPresense ping instead of waiting for a template tick.
+    Safety comes from gate_arrival_pending being the single authority: set once per
+    genuine arrival, cleared the moment the gate contact confirms it opened, so no
+    number of BLE pings can reopen it while already home.'
+  triggers:
+  - trigger: mqtt
+    topic: espresense/devices/person_a-iphone/gate
+    id: ble_gate
+    note: Fires on every ESPresense ping so arrival is evaluated within seconds, not
+      on the once-a-minute template tick.
+  - trigger: mqtt
+    topic: espresense/devices/person_a-iphone/living_room
+    id: ble_living
+  - trigger: state
+    entity_id: input_boolean.gate_arrival_pending
+    to: 'on'
+    id: pending
+  - trigger: state
+    entity_id:
+    - binary_sensor.ble_person_a_gate_nearby
+    - binary_sensor.ble_person_a_living_nearby
+    from: 'off'
+    to: 'on'
+    id: nearby
+  conditions:
+  - condition: state
+    entity_id: input_boolean.gate_presence_test_enabled
+    state: 'on'
+    note: Master kill switch - the BLE Auto Gate tile on the Security tab.
+  - condition: state
+    entity_id: input_boolean.gate_arrival_pending
+    state: 'on'
+    note: One-shot guard. Set once per genuine arrival, cleared on confirmed open.
+      This is what prevents a false open while already at home.
+  - condition: template
+    value_template: '{{ (as_timestamp(now()) - as_timestamp(states.input_boolean.gate_arrival_pending.last_changed))
+      <= 900 }}'
+    note: A stale flag must not open the gate hours later.
+  - condition: template
+    value_template: '{% set tg = states(''input_datetime.ble_person_a_gate_last_seen'')
+      %} {% set tl = states(''input_datetime.ble_person_a_living_last_seen'') %} {% set
+      dg = states(''input_number.ble_person_a_gate_distance'') | float(99) %} {% set
+      dl = states(''input_number.ble_person_a_living_distance'') | float(99) %} {% set
+      rg = (tg not in [''unknown'',''unavailable'','''']) and ((as_timestamp(now())
+      - as_timestamp(tg)) <= 45) %} {% set rl = (tl not in [''unknown'',''unavailable'',''''])
+      and ((as_timestamp(now()) - as_timestamp(tl)) <= 45) %} {{ (rg and dg <= 10)
+      or (rl and dl <= 10) }}'
+    note: 'Freshness check, not a delay: the sighting must be no older than 45s and
+      within 10m, on either node.'
+  - condition: state
+    entity_id: binary_sensor.sliding_gate_contact
+    state: 'off'
+  - condition: time
+    after: 07:30:00
+    before: '21:30:00'
+  actions:
+  - action: shell_command.doorbird_open_gate_relay1
+    note: Open first - the arrival flag is only consumed once the gate confirms it
+      moved.
+  - wait_for_trigger:
+    - trigger: state
+      entity_id: binary_sensor.sliding_gate_contact
+      to: 'on'
+    timeout: 00:00:20
+    continue_on_timeout: true
+  - if:
+    - condition: template
+      value_template: '{{ wait.completed }}'
+    then:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.gate_arrival_pending
+    - action: media_player.play_media
+      target:
+        entity_id: media_player.living_room
+      data:
+        media_content_id: http://192.168.1.10:8124/local/tts_local/person_a_is_home.mp3
+        media_content_type: music
+    - action: shell_command.telegram_gate_presence_test_text
+      data:
+        text: Gate opened on arrival (confirmed by gate contact).
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.gate_presence_last_notify
+      data:
+        datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+    else:
+    - action: shell_command.doorbird_open_gate_relay1
+      note: No movement - retry the relay once.
+    - wait_for_trigger:
+      - trigger: state
+        entity_id: binary_sensor.sliding_gate_contact
+        to: 'on'
+      timeout: 00:00:20
+      continue_on_timeout: true
+    - if:
+      - condition: template
+        value_template: '{{ wait.completed }}'
+      then:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.gate_arrival_pending
+      - action: media_player.play_media
+        target:
+          entity_id: media_player.living_room
+        data:
+          media_content_id: http://192.168.1.10:8124/local/tts_local/person_a_is_home.mp3
+          media_content_type: music
+      - action: shell_command.telegram_gate_presence_test_text
+        data:
+          text: Gate opened on arrival (second attempt - first relay call produced
+            no movement).
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.gate_presence_last_notify
+        data:
+          datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+      else:
+      - action: shell_command.telegram_gate_presence_test_text
+        data:
+          text: 'ALERT: gate did NOT open after two relay attempts. Arrival flag left
+            set for retry. Check DoorBird relay and gate contact.'
+        note: Flag deliberately left set so a later ping can retry.
+  mode: single
+  max_exceeded: silent
+- id: gate_presence_ble_missed_attempt_diagnostics
+  alias: Gate Presence BLE - Missed Attempt Diagnostics
+  description: Log why auto-open did not fire when an arrival cycle stays pending
+  trigger:
+  - platform: state
+    entity_id: input_boolean.gate_arrival_pending
+    to: 'on'
+    for: 00:00:20
+  condition:
+  - condition: state
+    entity_id: input_boolean.gate_presence_test_enabled
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.gate_arrival_pending
+    state: 'on'
+  action:
+  - variables:
+      tg: '{{ states(''input_datetime.ble_person_a_gate_last_seen'') }}'
+      tl: '{{ states(''input_datetime.ble_person_a_living_last_seen'') }}'
+      dg: '{{ states(''input_number.ble_person_a_gate_distance'') | float(99) }}'
+      dl: '{{ states(''input_number.ble_person_a_living_distance'') | float(99) }}'
+      rg: '{{ (tg not in [''unknown'',''unavailable'','''']) and ((as_timestamp(now())
+        - as_timestamp(tg)) <= 45) }}'
+      rl: '{{ (tl not in [''unknown'',''unavailable'','''']) and ((as_timestamp(now())
+        - as_timestamp(tl)) <= 45) }}'
+      near_ok: '{{ (rg and dg <= 10) or (rl and dl <= 10) }}'
+      home_ok: '{{ is_state(''person.person_a'',''home'') or is_state(''input_boolean.person_a_is_home'',''on'')
+        }}'
+      gate_ok: '{{ is_state(''binary_sensor.sliding_gate_contact'',''off'') }}'
+      time_ok: '{{ now().strftime(''%H:%M:%S'') >= ''07:30:00'' and now().strftime(''%H:%M:%S'')
+        <= ''21:30:00'' }}'
+      reasons: '{% set ns = namespace(items=[]) %} {% if not home_ok %}{% set ns.items
+        = ns.items + [''home_not_confirmed''] %}{% endif %} {% if not near_ok %}{%
+        set ns.items = ns.items + [''ble_not_recent_or_distance_gt_10m''] %}{% endif
+        %} {% if not gate_ok %}{% set ns.items = ns.items + [''gate_contact_not_off=''
+        ~ states(''binary_sensor.sliding_gate_contact'')] %}{% endif %} {% if not
+        time_ok %}{% set ns.items = ns.items + [''outside_time_window''] %}{% endif
+        %} {{ ns.items | join('', '') if ns.items else ''pending_but_reason_not_resolved''
+        }}'
+  - service: logbook.log
+    data:
+      name: Gate Presence BLE
+      message: Missed auto-open while pending. reasons={{ reasons }} | person={{ states('person.person_a')
+        }} | person_a_is_home={{ states('input_boolean.person_a_is_home') }} | gate_contact={{
+        states('binary_sensor.sliding_gate_contact') }} | gate_last_seen={{ tg }}
+        dist={{ dg }} | living_last_seen={{ tl }} dist={{ dl }}
+      entity_id: input_boolean.gate_arrival_pending
+  mode: single
+- id: ble_phone_seen_update
+  alias: BLE Person A Seen Update
+  trigger:
+  - platform: mqtt
+    topic: espresense/devices/person_a-iphone/gate
+    id: gate
+  - platform: mqtt
+    topic: espresense/devices/person_a-iphone/living_room
+    id: living
+  action:
+  - choose:
+    - conditions: '{{ trigger.id == ''gate'' }}'
+      sequence:
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.ble_person_a_gate_last_seen
+        data:
+          datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+      - condition: template
+        value_template: '{{ trigger.payload_json is defined and trigger.payload_json.distance
+          is defined }}'
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ble_person_a_gate_distance
+        data:
+          value: '{{ trigger.payload_json.distance | float(99) }}'
+    - conditions: '{{ trigger.id == ''living'' }}'
+      sequence:
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.ble_person_a_living_last_seen
+        data:
+          datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+      - condition: template
+        value_template: '{{ trigger.payload_json is defined and trigger.payload_json.distance
+          is defined }}'
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ble_person_a_living_distance
+        data:
+          value: '{{ trigger.payload_json.distance | float(99) }}'
+  - service: input_datetime.set_datetime
+    target:
+      entity_id: input_datetime.ble_phone_last_seen
+    data:
+      datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+  mode: single
+- id: ble_phone_arrival_record
+  alias: BLE Phone Arrival Record
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ble_phone_home
+    from: 'off'
+    to: 'on'
+  action:
+  - service: input_datetime.set_datetime
+    target:
+      entity_id: input_datetime.ble_phone_last_arrival
+    data:
+      datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+  mode: single
+- id: ble_phone_departure_record
+  alias: BLE Phone Departure Record
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ble_phone_home
+    from: 'on'
+    to: 'off'
+  action:
+  - variables:
+      mins: "{% set a = states('input_datetime.ble_phone_last_arrival') %} {% if a
+        in ['unknown','unavailable',''] %}\n  0\n{% else %}\n  {{ ((as_timestamp(now())
+        - as_timestamp(a))/60) | round(1) }}\n{% endif %}"
+  - service: input_datetime.set_datetime
+    target:
+      entity_id: input_datetime.ble_phone_last_departure
+    data:
+      datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ble_phone_last_stay_duration
+    data:
+      value: '{{ mins }} 分钟'
+  mode: single
+- id: ble_person_a_dual_node_departure_notify
+  alias: BLE Person A Dual Node Departure Notify
+  description: 测试：一块先检测到离家，立即检查另一块；若未离家则等待2分钟内变化，确认后立刻通知
+  trigger:
+  - platform: state
+    entity_id:
+    - binary_sensor.ble_person_a_gate_nearby
+    - binary_sensor.ble_person_a_living_nearby
+    to: 'off'
+    for: 00:01:00
+  condition:
+  - condition: state
+    entity_id: input_boolean.gate_presence_test_enabled
+    state: 'on'
+  - condition: state
+    entity_id: person.person_a
+    state: home
+  action:
+  - condition: state
+    entity_id: binary_sensor.ble_person_a_gate_nearby
+    state: 'off'
+  - condition: state
+    entity_id: binary_sensor.ble_person_a_living_nearby
+    state: 'off'
+  - service: shell_command.telegram_gate_presence_test_text
+    data:
+      text: 已确认离家（gate+living_room均检测不到 Person A Iphone），不执行开门。
+  mode: restart
+- id: person_person_a_geofence_home_telegram_notify
+  alias: Person Person A Geofence Home Telegram Notify
+  description: Send Telegram immediately when person.person_a changes to home
+  trigger:
+  - platform: state
+    entity_id: person.person_a
+    to: home
+  action:
+  - service: shell_command.telegram_gate_presence_test_text
+    data:
+      text: Geofence detected you are home (person.person_a = home).
+  mode: single
+- id: presence_three_way_mismatch_start_log
+  alias: Presence Three-Way Mismatch Start Log
+  description: Log when BLE, Geofence, and HomeKit presence become inconsistent
+  trigger:
+  - platform: template
+    value_template: "{{\n  (is_state('binary_sensor.ble_phone_home','on') | int)\n
+      \ + (is_state('person.person_a','home') | int)\n  + (is_state('input_boolean.person_a_is_home','on')
+      | int)\n  not in [0, 3]\n}}"
+  action:
+  - service: logbook.log
+    data:
+      name: Presence Consistency
+      message: MISMATCH START | BLE={{ states('binary_sensor.ble_phone_home') }} |
+        Geofence={{ states('person.person_a') }} | HomeKit={{ states('input_boolean.person_a_is_home')
+        }}
+      entity_id: input_boolean.person_a_is_home
+  mode: single
+- id: presence_three_way_mismatch_resolved_log
+  alias: Presence Three-Way Mismatch Resolved Log
+  description: Log when BLE, Geofence, and HomeKit presence become consistent again
+  trigger:
+  - platform: template
+    value_template: "{{\n  (is_state('binary_sensor.ble_phone_home','on') | int)\n
+      \ + (is_state('person.person_a','home') | int)\n  + (is_state('input_boolean.person_a_is_home','on')
+      | int)\n  in [0, 3]\n}}"
+  action:
+  - service: logbook.log
+    data:
+      name: Presence Consistency
+      message: MISMATCH RESOLVED | BLE={{ states('binary_sensor.ble_phone_home') }}
+        | Geofence={{ states('person.person_a') }} | HomeKit={{ states('input_boolean.person_a_is_home')
+        }}
+      entity_id: input_boolean.person_a_is_home
+  mode: single
+- id: gate_arrival_pending_set_on_home
+  alias: Gate Arrival Pending Set On Home
+  description: Set arrival pending only on a fresh geofence arrival so already-home
+    BLE scans cannot reopen the gate
+  trigger:
+  - platform: state
+    entity_id: person.person_a
+    from: not_home
+    to: home
+  condition:
+  - condition: state
+    entity_id: input_boolean.gate_arrival_pending
+    state: 'off'
+  action:
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.gate_arrival_pending
+  mode: single
+- id: gate_arrival_pending_clear_on_away
+  alias: Gate Arrival Pending Clear On Away
+  description: Clear arrival pending when geofence and BLE both away
+  trigger:
+  - platform: state
+    entity_id: person.person_a
+  - platform: state
+    entity_id: binary_sensor.ble_phone_home
+  condition:
+  - condition: state
+    entity_id: person.person_a
+    state: not_home
+  - condition: state
+    entity_id: binary_sensor.ble_phone_home
+    state: 'off'
+  action:
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.gate_arrival_pending
+  mode: single
+- id: ble_person_b_seen_update
+  alias: BLE Person B Seen Update
+  trigger:
+  - platform: mqtt
+    topic: espresense/devices/person_b-iphone/gate
+    id: gate
+  - platform: mqtt
+    topic: espresense/devices/person_b-iphone/living_room
+    id: living
+  action:
+  - choose:
+    - conditions: '{{ trigger.id == ''gate'' }}'
+      sequence:
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.ble_person_b_gate_last_seen
+        data:
+          datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+      - condition: template
+        value_template: '{{ trigger.payload_json is defined and trigger.payload_json.distance
+          is defined }}'
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ble_person_b_gate_distance
+        data:
+          value: '{{ trigger.payload_json.distance | float(99) }}'
+    - conditions: '{{ trigger.id == ''living'' }}'
+      sequence:
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.ble_person_b_living_last_seen
+        data:
+          datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+      - condition: template
+        value_template: '{{ trigger.payload_json is defined and trigger.payload_json.distance
+          is defined }}'
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ble_person_b_living_distance
+        data:
+          value: '{{ trigger.payload_json.distance | float(99) }}'
+  mode: single
+- id: person_a_presence_self_heal_on
+  alias: Person A Presence Self-Heal ON
+  description: Keep HomeKit mirror ON when geofence+BLE both confirm home
+  trigger:
+  - platform: state
+    entity_id: person.person_a
+    to: home
+    for: 00:02:00
+  - platform: state
+    entity_id: binary_sensor.ble_phone_home
+    to: 'on'
+    for: 00:02:00
+  condition:
+  - condition: state
+    entity_id: person.person_a
+    state: home
+  - condition: state
+    entity_id: binary_sensor.ble_phone_home
+    state: 'on'
+  action:
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.person_a_is_home
+  mode: single
+- id: person_a_presence_self_heal_off
+  alias: Person A Presence Self-Heal OFF
+  description: Only turn HomeKit mirror OFF when geofence+BLE both away for 5m
+  trigger:
+  - platform: state
+    entity_id: person.person_a
+    to: not_home
+    for: 00:05:00
+  - platform: state
+    entity_id: binary_sensor.ble_phone_home
+    to: 'off'
+    for: 00:05:00
+  condition:
+  - condition: state
+    entity_id: person.person_a
+    state: not_home
+  - condition: state
+    entity_id: binary_sensor.ble_phone_home
+    state: 'off'
+  action:
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.person_a_is_home
+  mode: single
+- id: person_b_presence_self_heal_on
+  alias: Person B Presence Self-Heal ON
+  description: Keep Person B HomeKit mirror ON when BLE confirms home for 2m
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ble_person_b_home
+    to: 'on'
+    for: 00:02:00
+  condition:
+  - condition: state
+    entity_id: binary_sensor.ble_person_b_home
+    state: 'on'
+  action:
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.person_b_is_home
+  mode: single
+- id: person_b_presence_self_heal_off
+  alias: Person B Presence Self-Heal OFF
+  description: Only turn Person B HomeKit mirror OFF when BLE away for 5m
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ble_person_b_home
+    to: 'off'
+    for: 00:05:00
+  condition:
+  - condition: state
+    entity_id: binary_sensor.ble_person_b_home
+    state: 'off'
+  action:
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.person_b_is_home
+  mode: single
+- id: gate_arrival_pending_reset_nightly
+  alias: Gate Arrival Pending Reset Nightly
+  description: Reset gate arrival pending flags at midnight to avoid stale state across
+    days
+  triggers:
+  - at: 00:00:00
+    trigger: time
+  actions:
+  - target:
+      entity_id: input_boolean.gate_arrival_pending
+    action: input_boolean.turn_off
+  mode: single
+- id: outdoor_sensor_motion_turn_on_outdoor_light_night
+  alias: Outdoor Sensor Motion -> Outdoor Light (60s extend)
+  description: Any outdoor motion turns on outdoor light for 60s; continuous motion
+    extends timer
+  triggers:
+  - entity_id: binary_sensor.outdoor_sensor_occupancy
+    to: 'on'
+    trigger: state
+  - seconds: /15
+    trigger: time_pattern
+  conditions:
+  - condition: sun
+    after: sunset
+    after_offset: -00:30:00
+    before: sunrise
+    before_offset: 00:30:00
+  - condition: state
+    entity_id: binary_sensor.outdoor_sensor_occupancy
+    state: 'on'
+  actions:
+  - target:
+      entity_id: light.outdoor_light
+    data:
+      brightness_pct: 100
+      color_temp_kelvin: 6500
+    action: light.turn_on
+  - delay: 00:01:00
+  - target:
+      entity_id: light.outdoor_light
+    action: light.turn_off
+  mode: restart
+- id: ble_person_a_arrival_distance_flag_reset
+  alias: BLE Person A Arrival Distance Flag Reset
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ble_phone_home
+    to: 'off'
+    for: 00:10:00
+  action:
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.ble_person_a_arrival_distance_sent
+  mode: single
+- id: ble_person_b_arrival_distance_flag_reset
+  alias: BLE Person B Arrival Distance Flag Reset
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ble_person_b_home
+    to: 'off'
+    for: 00:10:00
+  action:
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.ble_person_b_arrival_distance_sent
+  mode: single
+- id: ble_person_a_arrival_gate_flag_reset
+  alias: BLE Person A Arrival Gate/Living Flags Reset
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ble_phone_home
+    to: 'off'
+    for: 00:10:00
+  action:
+  - service: input_boolean.turn_off
+    target:
+      entity_id:
+      - input_boolean.ble_person_a_arrival_gate_sent
+      - input_boolean.ble_person_a_arrival_living_sent
+  mode: single
+- id: ble_person_b_arrival_gate_flag_reset
+  alias: BLE Person B Arrival Gate/Living Flags Reset
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ble_person_b_home
+    to: 'off'
+    for: 00:10:00
+  action:
+  - service: input_boolean.turn_off
+    target:
+      entity_id:
+      - input_boolean.ble_person_b_arrival_gate_sent
+      - input_boolean.ble_person_b_arrival_living_sent
+  mode: single
+- id: ble_person_a_first_distance_gate_each_arrival_telegram
+  alias: BLE Person A First Distance Gate Each Arrival Telegram
+  trigger:
+  - platform: mqtt
+    topic: espresense/devices/person_a-iphone/gate
+  condition:
+  - condition: state
+    entity_id: binary_sensor.ble_phone_home
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.ble_person_a_arrival_gate_sent
+    state: 'off'
+  - condition: template
+    value_template: '{{ trigger.payload_json is defined and trigger.payload_json.distance
+      is defined }}'
+  action:
+  - service: shell_command.telegram_gate_presence_test_text
+    data:
+      text: BLE到家首次距离 | Person A | 节点=gate | 距离={{ trigger.payload_json.distance }}m
+        | 时间={{ now().strftime('%Y-%m-%d %H:%M:%S') }}
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.ble_person_a_arrival_gate_sent
+  mode: single
+- id: ble_person_a_first_distance_living_each_arrival_telegram
+  alias: BLE Person A First Distance Living Each Arrival Telegram
+  trigger:
+  - platform: mqtt
+    topic: espresense/devices/person_a-iphone/living_room
+  condition:
+  - condition: state
+    entity_id: binary_sensor.ble_phone_home
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.ble_person_a_arrival_living_sent
+    state: 'off'
+  - condition: template
+    value_template: '{{ trigger.payload_json is defined and trigger.payload_json.distance
+      is defined }}'
+  action:
+  - service: shell_command.telegram_gate_presence_test_text
+    data:
+      text: BLE到家首次距离 | Person A | 节点=living_room | 距离={{ trigger.payload_json.distance
+        }}m | 时间={{ now().strftime('%Y-%m-%d %H:%M:%S') }}
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.ble_person_a_arrival_living_sent
+  mode: single
+- id: ble_person_b_first_distance_gate_each_arrival_telegram
+  alias: BLE Person B First Distance Gate Each Arrival Telegram
+  trigger:
+  - platform: mqtt
+    topic: espresense/devices/person_b-iphone/gate
+  condition:
+  - condition: state
+    entity_id: binary_sensor.ble_person_b_home
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.ble_person_b_arrival_gate_sent
+    state: 'off'
+  - condition: template
+    value_template: '{{ trigger.payload_json is defined and trigger.payload_json.distance
+      is defined }}'
+  action:
+  - service: shell_command.telegram_gate_presence_test_text
+    data:
+      text: BLE到家首次距离 | Person B | 节点=gate | 距离={{ trigger.payload_json.distance }}m
+        | 时间={{ now().strftime('%Y-%m-%d %H:%M:%S') }}
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.ble_person_b_arrival_gate_sent
+  mode: single
+- id: ble_person_b_first_distance_living_each_arrival_telegram
+  alias: BLE Person B First Distance Living Each Arrival Telegram
+  trigger:
+  - platform: mqtt
+    topic: espresense/devices/person_b-iphone/living_room
+  condition:
+  - condition: state
+    entity_id: binary_sensor.ble_person_b_home
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.ble_person_b_arrival_living_sent
+    state: 'off'
+  - condition: template
+    value_template: '{{ trigger.payload_json is defined and trigger.payload_json.distance
+      is defined }}'
+  action:
+  - service: shell_command.telegram_gate_presence_test_text
+    data:
+      text: BLE到家首次距离 | Person B | 节点=living_room | 距离={{ trigger.payload_json.distance
+        }}m | 时间={{ now().strftime('%Y-%m-%d %H:%M:%S') }}
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.ble_person_b_arrival_living_sent
+  mode: single
+- id: homepod_manual_play_person_a
+  alias: HomePod Manual Play Person A
+  trigger:
+  - platform: mqtt
+    topic: home/manual/homepod_play_person_a
+  action:
+  - service: media_player.play_media
+    target:
+      entity_id: media_player.living_room
+    data:
+      media_content_id: http://192.168.1.10:8124/local/tts_local/person_a_is_home.mp3
+      media_content_type: music
+  mode: single
+- id: alarm_disarm_force_stop_siren_immediate
+  alias: After Disarm - Stop Siren Immediately
+  triggers:
+  - entity_id: input_boolean.alarm_bottom_armed
+    to: 'off'
+    trigger: state
+  actions:
+  - target:
+      entity_id: script.alarm_intrusion_response
+    action: script.turn_off
+  - data:
+      topic: zigbee2mqtt/Siren/set
+      payload: '{"alarm":false}'
+    action: mqtt.publish
+  - target:
+      entity_id: media_player.living_room
+    action: media_player.media_stop
+  mode: single
+- id: cabinetren_ti_dong_zuo_gao_jing_bu_qu_fen_bu_fang
+  alias: Cabinet - Motion Alert (Regardless of Armed Status)
+  description: Notify on Cabinet motion at all times, independent of whether the alarm
+    is armed
+  triggers:
+  - trigger: state
+    entity_id: binary_sensor.cabinet_occupancy
+    to: 'on'
+    for: 00:00:02
+  actions:
+  - action: shell_command.telegram_alarm_motion_cabinet
+  - action: shell_command.imessage_alarm_motion_cabinet
+  mode: single
+- id: outdoor_light_auto_off_safety_net
+  alias: Outdoor Light Auto-Off Safety Net (10 min, Daytime Only)
+  description: 'Daytime-only safety net: turns Outdoor Light off if it has been on
+    continuously for 10 minutes during the day, when the night motion automation isn''t
+    managing it. Does not apply at night so continuous evening use (e.g. BBQing near
+    the light) is not cut off.'
+  triggers:
+  - trigger: state
+    entity_id: light.outdoor_light
+    to: 'on'
+    for: 00:10:00
+  conditions:
+  - condition: sun
+    after: sunrise
+    after_offset: 00:30:00
+    before: sunset
+    before_offset: -00:30:00
+  actions:
+  - action: light.turn_off
+    target:
+      entity_id: light.outdoor_light
+  mode: single
+- id: study_co2_air_quality_alert
+  alias: Study CO2 Air Quality Alert
+  description: Notify Person A when Study CO2 crosses warning (1000ppm) or danger (2000ppm)
+    thresholds, and when it returns to normal.
+  triggers:
+  - trigger: numeric_state
+    entity_id: sensor.study_study_carbon_dioxide
+    above: 1000
+    for: 00:05:00
+    id: warning
+  - trigger: numeric_state
+    entity_id: sensor.study_study_carbon_dioxide
+    above: 2000
+    for: 00:05:00
+    id: danger
+  - trigger: numeric_state
+    entity_id: sensor.study_study_carbon_dioxide
+    below: 1000
+    for: 00:05:00
+    id: normal
+  actions:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: warning
+      - condition: not
+        conditions:
+        - condition: time
+          after: 00:00:00
+          before: 07:00:00
+      sequence:
+      - action: notify.send_message
+        data:
+          title: Study Air Quality
+          message: CO2 is elevated at {{ states('sensor.study_study_carbon_dioxide')
+            }} ppm — consider ventilating.
+        target:
+          entity_id: notify.person_a_iphone
+    - conditions:
+      - condition: trigger
+        id: danger
+      sequence:
+      - action: notify.send_message
+        data:
+          title: Study Air Quality — High CO2
+          message: CO2 is HIGH at {{ states('sensor.study_study_carbon_dioxide') }}
+            ppm — ventilate now!
+        target:
+          entity_id: notify.person_a_iphone
+    - conditions:
+      - condition: trigger
+        id: normal
+      - condition: not
+        conditions:
+        - condition: time
+          after: 00:00:00
+          before: 07:00:00
+      sequence:
+      - action: notify.send_message
+        data:
+          title: Study Air Quality
+          message: CO2 is back to normal at {{ states('sensor.study_study_carbon_dioxide')
+            }} ppm.
+        target:
+          entity_id: notify.person_a_iphone
+  mode: queued
+  max: 5
+- id: room1_co2_air_quality_alert
+  alias: Room 1 CO2 Air Quality Alert
+  description: Notify Person A when Room 1 CO2 crosses warning (1000ppm) or danger (2000ppm)
+    thresholds, and when it returns to normal.
+  triggers:
+  - trigger: numeric_state
+    entity_id: sensor.bedroom1_bedroom1_carbon_dioxide
+    above: 1000
+    for: 00:05:00
+    id: warning
+  - trigger: numeric_state
+    entity_id: sensor.bedroom1_bedroom1_carbon_dioxide
+    above: 2000
+    for: 00:05:00
+    id: danger
+  - trigger: numeric_state
+    entity_id: sensor.bedroom1_bedroom1_carbon_dioxide
+    below: 1000
+    for: 00:05:00
+    id: normal
+  actions:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: warning
+      - condition: not
+        conditions:
+        - condition: time
+          after: 00:00:00
+          before: 07:00:00
+      sequence:
+      - action: notify.send_message
+        data:
+          title: Room 1 Air Quality
+          message: CO2 is elevated at {{ states('sensor.bedroom1_bedroom1_carbon_dioxide')
+            }} ppm — consider ventilating.
+        target:
+          entity_id: notify.person_a_iphone
+    - conditions:
+      - condition: trigger
+        id: danger
+      sequence:
+      - action: notify.send_message
+        data:
+          title: Room 1 Air Quality — High CO2
+          message: CO2 is HIGH at {{ states('sensor.bedroom1_bedroom1_carbon_dioxide')
+            }} ppm — ventilate now!
+        target:
+          entity_id: notify.person_a_iphone
+    - conditions:
+      - condition: trigger
+        id: normal
+      - condition: not
+        conditions:
+        - condition: time
+          after: 00:00:00
+          before: 07:00:00
+      sequence:
+      - action: notify.send_message
+        data:
+          title: Room 1 Air Quality
+          message: CO2 is back to normal at {{ states('sensor.bedroom1_bedroom1_carbon_dioxide')
+            }} ppm.
+        target:
+          entity_id: notify.person_a_iphone
+  mode: queued
+  max: 5
+- id: '1784786914620'
+  alias: Fujitsu AC Night Setback
+  description: After 11:30pm (until 7am), if no motion is detected in the Dining Room
+    for 10 minutes AND the outdoor temperature is below 15C, set the Fujitsu AC to
+    heat 16C. Only runs while the Fujitsu Night Setback switch is on. Skipped on mild/warm
+    nights.
+  triggers:
+  - trigger: state
+    entity_id: binary_sensor.dining_room_occupancy
+    to: 'off'
+    for: 00:10:00
+  conditions:
+  - condition: state
+    entity_id: input_boolean.fujitsu_night_setback
+    state: 'on'
+  - condition: time
+    after: '23:30:00'
+    before: 07:00:00
+  - condition: numeric_state
+    entity_id: sensor.temp_outdoor_temperature
+    below: 15
+  actions:
+  - action: climate.set_hvac_mode
+    target:
+      entity_id: climate.fujitsu_ac_fujitsu_ac
+    data:
+      hvac_mode: heat
+  - action: climate.set_temperature
+    target:
+      entity_id: climate.fujitsu_ac_fujitsu_ac
+    data:
+      temperature: 16
+  mode: single
+- id: room_2_ikea_wheel_control
+  alias: Room 2 IKEA wheel control
+  description: BILRESA scroll wheel controls Room 2 Light brightness and color temperature.
+  mode: restart
+  triggers:
+  - trigger: state
+    entity_id: sensor.bilresa_scroll_wheel_current_switch_position_1
+    not_from:
+    - unavailable
+    - unknown
+    id: brighter
+  - trigger: state
+    entity_id: sensor.bilresa_scroll_wheel_current_switch_position_2
+    not_from:
+    - unavailable
+    - unknown
+    id: dimmer
+  - trigger: state
+    entity_id: event.bilresa_scroll_wheel_button_3
+    not_from:
+    - unavailable
+    - unknown
+    id: button_group_1
+  - trigger: state
+    entity_id: event.bilresa_scroll_wheel_button_6
+    not_from:
+    - unavailable
+    - unknown
+    id: toggle
+  - trigger: state
+    entity_id: event.bilresa_scroll_wheel_button_9
+    not_from:
+    - unavailable
+    - unknown
+    id: toggle
+  - trigger: state
+    entity_id: event.bilresa_scroll_wheel_button_4
+    not_from:
+    - unavailable
+    - unknown
+    id: cooler
+  - trigger: state
+    entity_id: event.bilresa_scroll_wheel_button_5
+    not_from:
+    - unavailable
+    - unknown
+    id: warmer
+  actions:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: brighter
+      sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.room_2_light
+        data:
+          brightness_step_pct: 20
+    - conditions:
+      - condition: trigger
+        id: dimmer
+      sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.room_2_light
+        data:
+          brightness_step_pct: -20
+    - conditions:
+      - condition: trigger
+        id: button_group_1
+      - condition: template
+        value_template: '{{ trigger.to_state.attributes.event_type == ''multi_press_1''
+          }}'
+      sequence:
+      - choose:
+        - conditions:
+          - condition: state
+            entity_id: light.room_2_light
+            state: 'off'
+          sequence:
+          - action: light.turn_on
+            target:
+              entity_id: light.room_2_light
+            data:
+              brightness_pct: 80
+        default:
+        - action: light.turn_off
+          target:
+            entity_id: light.room_2_light
+    - conditions:
+      - condition: trigger
+        id: button_group_1
+      - condition: template
+        value_template: '{{ trigger.to_state.attributes.event_type == ''multi_press_2''
+          }}'
+      sequence:
+      - variables:
+          current_kelvin: '{{ state_attr(''light.room_2_light'', ''color_temp_kelvin'')
+            | int(3200) }}'
+      - action: light.turn_on
+        target:
+          entity_id: light.room_2_light
+        data:
+          color_temp_kelvin: "{% set cur = current_kelvin | int(3200) %} {% if cur
+            < 2700 %}\n  3200\n{% elif cur < 3750 %}\n  4300\n{% elif cur < 5400 %}\n
+            \ 6500\n{% else %}\n  2200\n{% endif %}"
+    - conditions:
+      - condition: trigger
+        id: cooler
+      sequence:
+      - variables:
+          current_kelvin: '{{ state_attr(''light.room_2_light'', ''color_temp_kelvin'')
+            | int(3200) }}'
+      - action: light.turn_on
+        target:
+          entity_id: light.room_2_light
+        data:
+          color_temp_kelvin: "{% set steps = [2200, 3200, 4300, 6500] %} {% set cur
+            = current_kelvin | int(3200) %} {% if cur < 2700 %}\n  3200\n{% elif cur
+            < 3750 %}\n  4300\n{% elif cur < 5400 %}\n  6500\n{% else %}\n  6500\n{%
+            endif %}"
+    - conditions:
+      - condition: trigger
+        id: warmer
+      sequence:
+      - variables:
+          current_kelvin: '{{ state_attr(''light.room_2_light'', ''color_temp_kelvin'')
+            | int(3200) }}'
+      - action: light.turn_on
+        target:
+          entity_id: light.room_2_light
+        data:
+          color_temp_kelvin: "{% set cur = current_kelvin | int(3200) %} {% if cur
+            > 5400 %}\n  4300\n{% elif cur > 3750 %}\n  3200\n{% elif cur > 2700 %}\n
+            \ 2200\n{% else %}\n  2200\n{% endif %}"
+- id: '1787538459923'
+  alias: Fan CO2 - Turn On When High
+  description: Turns the Xiaomi fan on at the configured speed and swing setting when
+    CO2 in the selected room is above the ON threshold. Also re-checks immediately
+    when the room, threshold, swing or Auto Mode is changed, so a room already over
+    the limit is picked up without waiting for a fresh crossing.
+  triggers:
+  - trigger: numeric_state
+    entity_id: sensor.fan_co2_selected_room
+    above: input_number.fan_co2_on_threshold
+    for: 00:02:00
+  - trigger: state
+    entity_id:
+    - input_select.fan_co2_room
+    - input_number.fan_co2_on_threshold
+  - trigger: state
+    entity_id: input_boolean.fan_co2_auto
+    to: 'on'
+  - trigger: homeassistant
+    event: start
+  - trigger: state
+    entity_id: input_boolean.fan_co2_swing
+  conditions:
+  - condition: state
+    entity_id: input_boolean.fan_co2_auto
+    state: 'on'
+  - condition: numeric_state
+    entity_id: sensor.fan_co2_selected_room
+    above: input_number.fan_co2_on_threshold
+  actions:
+  - action: fan.turn_on
+    target:
+      entity_id: fan.xiaomi_fan
+    data:
+      percentage: '{{ states(''input_number.fan_co2_speed'') | int(50) }}'
+  - delay: 00:00:03
+  - action: fan.set_percentage
+    target:
+      entity_id: fan.xiaomi_fan
+    data:
+      percentage: '{{ states(''input_number.fan_co2_speed'') | int(50) }}'
+  - choose:
+    - conditions:
+      - condition: state
+        entity_id: input_boolean.fan_co2_swing
+        state: 'on'
+      sequence:
+      - action: fan.oscillate
+        target:
+          entity_id: fan.xiaomi_fan
+        data:
+          oscillating: true
+    default:
+    - action: fan.oscillate
+      target:
+        entity_id: fan.xiaomi_fan
+      data:
+        oscillating: false
+  mode: single
+- id: '1787538472808'
+  alias: Fan CO2 - Turn Off When Clear
+  description: Turns the Xiaomi fan off when CO2 in the selected room is below the
+    OFF threshold. Also re-checks when the room or threshold changes. The gap between
+    the ON and OFF thresholds stops the fan cycling around a single value.
+  triggers:
+  - trigger: numeric_state
+    entity_id: sensor.fan_co2_selected_room
+    below: input_number.fan_co2_off_threshold
+    for: 00:05:00
+  - trigger: state
+    entity_id:
+    - input_select.fan_co2_room
+    - input_number.fan_co2_off_threshold
+  - trigger: homeassistant
+    event: start
+  conditions:
+  - condition: state
+    entity_id: input_boolean.fan_co2_auto
+    state: 'on'
+  - condition: state
+    entity_id: fan.xiaomi_fan
+    state: 'on'
+  - condition: numeric_state
+    entity_id: sensor.fan_co2_selected_room
+    below: input_number.fan_co2_off_threshold
+  actions:
+  - action: fan.turn_off
+    target:
+      entity_id: fan.xiaomi_fan
+  mode: single
+- id: '1787543524141'
+  alias: Room 2 IKEA wheel - Fan control (group 3)
+  description: BILRESA scroll wheel group 3 controls the Xiaomi standing fan. Wheel
+    adjusts speed in 10% steps, single click toggles the fan, double click toggles
+    oscillation. Group 1 and 2 remain assigned to the Room 2 light.
+  triggers:
+  - trigger: state
+    entity_id: event.bilresa_scroll_wheel_button_7
+    not_from:
+    - unavailable
+    - unknown
+    id: speed_up
+  - trigger: state
+    entity_id: event.bilresa_scroll_wheel_button_8
+    not_from:
+    - unavailable
+    - unknown
+    id: speed_down
+  - trigger: state
+    entity_id: event.bilresa_scroll_wheel_button_9
+    not_from:
+    - unavailable
+    - unknown
+    id: button
+  actions:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: speed_up
+      sequence:
+      - action: fan.increase_speed
+        target:
+          entity_id: fan.xiaomi_fan
+        data:
+          percentage_step: 10
+    - conditions:
+      - condition: trigger
+        id: speed_down
+      sequence:
+      - action: fan.decrease_speed
+        target:
+          entity_id: fan.xiaomi_fan
+        data:
+          percentage_step: 10
+    - conditions:
+      - condition: trigger
+        id: button
+      - condition: template
+        value_template: '{{ trigger.to_state.attributes.event_type == ''multi_press_1''
+          }}'
+      sequence:
+      - action: fan.toggle
+        target:
+          entity_id: fan.xiaomi_fan
+    - conditions:
+      - condition: trigger
+        id: button
+      - condition: template
+        value_template: '{{ trigger.to_state.attributes.event_type == ''multi_press_2''
+          }}'
+      sequence:
+      - choose:
+        - conditions:
+          - condition: state
+            entity_id: fan.xiaomi_fan
+            attribute: oscillating
+            state: true
+          sequence:
+          - action: fan.oscillate
+            target:
+              entity_id: fan.xiaomi_fan
+            data:
+              oscillating: false
+        default:
+        - action: fan.oscillate
+          target:
+            entity_id: fan.xiaomi_fan
+          data:
+            oscillating: true
+  mode: queued
+  max: 25
+- id: '1787638744201'
+  alias: Water Valve 1 - Scheduled watering
+  description: Opens outdoor valve 1 at its start time for the set duration, subject
+    to the auto toggle and the date pattern. Also applies the set duration whenever
+    the valve is opened by hand, so a manual toggle runs for the same length as Run
+    now. The valve's own countdown closes it; a failsafe shuts it if it stays open
+    past the maximum run length.
+  triggers:
+  - trigger: time
+    at: input_datetime.water_valve_1_start_time
+    id: start
+  - trigger: state
+    entity_id: switch.water_valve_1
+    to: 'on'
+    id: opened
+  - trigger: state
+    entity_id: switch.water_valve_1
+    to: 'on'
+    for: 02:05:00
+    id: failsafe
+  conditions: []
+  actions:
+  - choose:
+    - alias: Start time reached - water for the set duration
+      conditions:
+      - condition: trigger
+        id: start
+      - condition: state
+        entity_id: input_boolean.water_valve_1_auto
+        state: 'on'
+      - condition: or
+        conditions:
+        - condition: state
+          entity_id: input_select.water_valve_1_dates
+          state: Every day
+        - condition: and
+          conditions:
+          - condition: state
+            entity_id: input_select.water_valve_1_dates
+            state: Odd dates
+          - condition: template
+            value_template: '{{ now().day % 2 == 1 }}'
+        - condition: and
+          conditions:
+          - condition: state
+            entity_id: input_select.water_valve_1_dates
+            state: Even dates
+          - condition: template
+            value_template: '{{ now().day % 2 == 0 }}'
+        - condition: and
+          conditions:
+          - condition: state
+            entity_id: input_select.water_valve_1_dates
+            state: Every other odd date
+          - condition: template
+            value_template: '{{ now().day % 4 == 1 }}'
+        - condition: and
+          conditions:
+          - condition: state
+            entity_id: input_select.water_valve_1_dates
+            state: Every other even date
+          - condition: template
+            value_template: '{{ now().day % 4 == 2 }}'
+      sequence:
+      - action: number.set_value
+        target:
+          entity_id: number.water_valve_1_countdown
+        data:
+          value: '{{ states(''input_number.water_valve_1_duration'') | int(15) }}'
+      - delay:
+          seconds: 2
+      - action: switch.turn_on
+        target:
+          entity_id: switch.water_valve_1
+    - alias: Valve opened - apply the set duration
+      conditions:
+      - condition: trigger
+        id: opened
+      sequence:
+      - action: number.set_value
+        target:
+          entity_id: number.water_valve_1_countdown
+        data:
+          value: '{{ states(''input_number.water_valve_1_duration'') | int(15) }}'
+    - alias: Failsafe - valve open too long
+      conditions:
+      - condition: trigger
+        id: failsafe
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.water_valve_1
+  mode: queued
+  max: 5
+- id: '1787638760342'
+  alias: Water Valve 2 - Scheduled watering
+  description: Opens outdoor valve 2 at its start time for the set duration, subject
+    to the auto toggle and the date pattern. Also applies the set duration whenever
+    the valve is opened by hand, so a manual toggle runs for the same length as Run
+    now. The valve's own countdown closes it; a failsafe shuts it if it stays open
+    past the maximum run length.
+  triggers:
+  - trigger: time
+    at: input_datetime.water_valve_2_start_time
+    id: start
+  - trigger: state
+    entity_id: switch.water_valve_2
+    to: 'on'
+    id: opened
+  - trigger: state
+    entity_id: switch.water_valve_2
+    to: 'on'
+    for: 02:05:00
+    id: failsafe
+  conditions: []
+  actions:
+  - choose:
+    - alias: Start time reached - water for the set duration
+      conditions:
+      - condition: trigger
+        id: start
+      - condition: state
+        entity_id: input_boolean.water_valve_2_auto
+        state: 'on'
+      - condition: or
+        conditions:
+        - condition: state
+          entity_id: input_select.water_valve_2_dates
+          state: Every day
+        - condition: and
+          conditions:
+          - condition: state
+            entity_id: input_select.water_valve_2_dates
+            state: Odd dates
+          - condition: template
+            value_template: '{{ now().day % 2 == 1 }}'
+        - condition: and
+          conditions:
+          - condition: state
+            entity_id: input_select.water_valve_2_dates
+            state: Even dates
+          - condition: template
+            value_template: '{{ now().day % 2 == 0 }}'
+        - condition: and
+          conditions:
+          - condition: state
+            entity_id: input_select.water_valve_2_dates
+            state: Every other odd date
+          - condition: template
+            value_template: '{{ now().day % 4 == 1 }}'
+        - condition: and
+          conditions:
+          - condition: state
+            entity_id: input_select.water_valve_2_dates
+            state: Every other even date
+          - condition: template
+            value_template: '{{ now().day % 4 == 2 }}'
+      sequence:
+      - action: number.set_value
+        target:
+          entity_id: number.water_valve_2_countdown
+        data:
+          value: '{{ states(''input_number.water_valve_2_duration'') | int(15) }}'
+      - delay:
+          seconds: 2
+      - action: switch.turn_on
+        target:
+          entity_id: switch.water_valve_2
+    - alias: Valve opened - apply the set duration
+      conditions:
+      - condition: trigger
+        id: opened
+      sequence:
+      - action: number.set_value
+        target:
+          entity_id: number.water_valve_2_countdown
+        data:
+          value: '{{ states(''input_number.water_valve_2_duration'') | int(15) }}'
+    - alias: Failsafe - valve open too long
+      conditions:
+      - condition: trigger
+        id: failsafe
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.water_valve_2
+  mode: queued
+  max: 5
+- id: '1787724647320'
+  alias: ESPresense node offline alert
+  description: Telegram alert when either ESPresense BLE node drops off MQTT for more
+    than 5 minutes, and again when it returns. Driven by the connectivity binary sensors
+    (MQTT last-will), so it needs no recorder history.
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.espresense_gate2_connectivity
+    - binary_sensor.espresense_living_room_connectivity_2
+    to: 'off'
+    for:
+      minutes: 5
+    id: offline
+  - trigger: state
+    entity_id:
+    - binary_sensor.espresense_gate2_connectivity
+    - binary_sensor.espresense_living_room_connectivity_2
+    from: 'off'
+    to: 'on'
+    for:
+      minutes: 1
+    id: online
+  conditions: []
+  actions:
+  - action: shell_command.telegram_gate_presence_test_text
+    data:
+      text: '{% set n = ''Gate'' if ''gate'' in trigger.entity_id else ''Living Room''
+        %}{% if trigger.to_state.state == ''off'' %}ALERT: ESPresense {{ n }} node
+        offline for 5+ minutes{% else %}RECOVERED: ESPresense {{ n }} node back online{%
+        endif %}'
+  mode: queued
+  max: 4
+- id: '1787731877596'
+  alias: Gate Arrival Pending Set On BLE Return
+  description: Backup arrival detection for when iOS geofencing is late or silent.
+    Sets the arrival flag when the gate node sees the phone again after the living
+    room node has not seen it for 15+ minutes - an unambiguous went-away-and-came-back
+    signal that does not depend on GPS.
+  triggers:
+  - trigger: state
+    entity_id: binary_sensor.ble_person_a_gate_nearby
+    from: 'off'
+    to: 'on'
+  conditions:
+  - condition: state
+    entity_id: input_boolean.gate_arrival_pending
+    state: 'off'
+    note: Do not re-arm a flag that is already set.
+  - condition: template
+    value_template: '{% set tl = states(''input_datetime.ble_person_a_living_last_seen'')
+      %} {{ tl in [''unknown'',''unavailable'',''''] or (as_timestamp(now()) - as_timestamp(tl))
+      >= 900 }}'
+    note: The indoor node has not seen the phone for 15+ minutes, so this is a genuine
+      return rather than moving around the house.
+  - condition: template
+    value_template: '{% set t = states(''input_datetime.gate_presence_last_notify'')
+      %} {{ t in [''unknown'',''unavailable'',''''] or (as_timestamp(now()) - as_timestamp(t))
+      >= 900 }}'
+    note: Do not re-arm within 15 minutes of the gate having just been opened.
+  actions:
+  - action: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.gate_arrival_pending
+  mode: single

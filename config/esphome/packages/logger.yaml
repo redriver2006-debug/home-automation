@@ -1,0 +1,6 @@
+logger:
+  # These ESP32 IR nodes were running with DEBUG logging plus IR frame dumps.
+  # That combination creates too much log traffic and can make the native API
+  # sluggish or temporarily unresponsive. INFO keeps enough signal for normal
+  # troubleshooting without constantly stressing the device.
+  level: INFO

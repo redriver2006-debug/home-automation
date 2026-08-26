@@ -1,0 +1,46 @@
+substitutions:
+  name: daikin-ir
+  friendly_name: "Daikin IR"
+  ap_ssid: "Daikin-Ir Fallback Hotspot"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+# ESP32-C6 DevKitC-1. The C6 is only supported under ESP-IDF —
+# the Arduino framework has no C6 support at all.
+esp32:
+  board: esp32-c6-devkitc-1
+  framework:
+    type: esp-idf
+
+packages:
+  wifi: !include packages/wifi.yaml
+  ota: !include packages/ota.yaml
+  logger: !include packages/logger.yaml
+  api: !include packages/api.yaml
+  common_ir: !include packages/common_ir.yaml
+
+# IR transmitter stays on GPIO14 — free and safe on the C6.
+remote_transmitter:
+  pin: GPIO14
+  carrier_duty_percent: 50%
+
+# Receiver moved GPIO4 -> GPIO18. On the C6, GPIO4 is a strapping pin
+# (it is sampled at boot to pick the boot mode), so holding it via a
+# pull-up and an IR module can stop the board booting reliably.
+remote_receiver:
+  id: rcvr
+  pin:
+    number: GPIO18
+    inverted: true
+    mode:
+      input: true
+      pullup: true
+  tolerance: 55%
+  dump: all
+
+climate:
+  - platform: daikin
+    name: "Daikin AC"
+    receiver_id: rcvr

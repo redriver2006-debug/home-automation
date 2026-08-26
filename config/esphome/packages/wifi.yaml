@@ -1,0 +1,24 @@
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Keep the radio awake. These nodes are control endpoints, and modem sleep
+  # is more likely to cause reconnect stalls than to save anything useful.
+  power_save_mode: none
+
+  # Be more aggressive about self-recovery. If Wi-Fi stays broken for too long,
+  # reboot the node instead of waiting indefinitely for the stack to recover.
+  reboot_timeout: 10min
+
+  ap:
+    # Keep the fallback AP so a bad Wi-Fi state is still recoverable locally.
+    ssid: "${ap_ssid}"
+    password: "CHANGE_ME"
+
+captive_portal:
+
+sensor:
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+    entity_category: diagnostic
