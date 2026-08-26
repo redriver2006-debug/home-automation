@@ -266,10 +266,83 @@ Without AI assistance, this project would have been impossible for me. With AI, 
 
 ---
 
+## Part Two: From Scripts to Home Assistant (March - August 2026)
+
+The system described above worked, but it was a collection of bespoke Python
+scripts. Every new device meant more custom code, and only the AI really
+understood how the pieces fitted together. Over the following months it was
+rebuilt on **Home Assistant Core**, running in Docker on the same Raspberry Pi.
+
+### What replaced what
+
+| Before | After |
+|---|---|
+| Custom Python integration script | Home Assistant automations |
+| Homebridge for HomeKit | Home Assistant's built-in HomeKit bridge |
+| Sonoff Zigbee USB dongle | SMLIGHT SLZB-06U, an Ethernet-attached coordinator |
+| Telegram alerts only | Telegram, iMessage and push notifications |
+
+The Zigbee migration was the riskiest step. Moving between coordinators built on
+different chip families cannot preserve existing pairings, so roughly twenty
+devices had to be re-paired by hand. Because the friendly names live in the
+Zigbee2MQTT configuration and are keyed by each device's hardware address, the
+entity IDs survived and nothing downstream needed editing.
+
+### What got added
+
+- **BLE presence** - two ESPresense nodes, at the gate and in the living room,
+  track phone proximity and open the sliding gate automatically on arrival
+- **Infrared control of two air conditioners** - ESPHome nodes with an IR
+  transmitter and receiver, so the units can be driven from Home Assistant and
+  still tracked when the physical remote is used
+- **Air quality automation** - CO2 sensors in three rooms, with alerts and a fan
+  that responds to rising levels
+- **Irrigation** - a Zigbee dual water valve with per-valve start time, run
+  duration, and odd/even-date scheduling
+- **Matter** - a light shared from Apple Home into Home Assistant, plus a
+  scroll-wheel controller
+
+The full configuration is published in [`config/`](../config), with credentials,
+names, coordinates and addresses removed.
+
+### Three more lessons
+
+**Silent failures are the expensive ones.** After an iOS upgrade the companion
+app re-registered itself and Home Assistant created a second device entry for
+the same phone. Nothing errored. The app kept reporting faithfully - into an
+entity that nothing was watching. Presence detection, automatic gate opening and
+three notification automations were dead for two months before anyone noticed.
+The giveaway was a battery level frozen at 45% for twelve hours while the phone
+was plainly in use. A device tracker that stops changing looks exactly like a
+person who never leaves.
+
+**A backup you have never restored is not a backup.** The backup script staged
+files into `/tmp`, which on this Pi is a RAM disk rather than storage. As the
+system grew the copy stopped fitting; the job failed and left 1.7 GB sitting in
+memory. It surfaced only because an unrelated build failed with "no space left
+on device" while 18 GB of disk sat free. The same script had also been copying a
+live database file, which would probably not have restored cleanly.
+
+**Defaults are not free.** Home Assistant records every state change of every
+entity for ten days unless told otherwise. That database reached 1.7 GB, and
+roughly three quarters of it was Bluetooth presence readings updating several
+times a second - data nobody would ever look at. Excluding the noisy entities
+brought it back to a few tens of megabytes, and made backups finish in seconds
+instead of hours.
+
+### Current status (August 2026)
+
+- Home Assistant Core on a Raspberry Pi, with around 50 devices and 470 entities
+- Zigbee via SLZB-06U and Zigbee2MQTT
+- Presence, gate automation, climate, air quality, irrigation and alerting
+- Config-only backups, twice weekly, mirrored to a Mac and verified
+
+---
+
 ## Acknowledgments
 
 This project was built entirely with AI assistance, primarily using **Claude Opus 4.5** (Anthropic) through the OpenClaw framework. This demonstrates that the future of personal technology is human-AI collaboration.
 
 ---
 
-*Last updated: March 2026*
+*Last updated: August 2026*
